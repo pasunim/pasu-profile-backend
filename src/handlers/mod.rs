@@ -1,0 +1,8 @@
+pub mod about;
+pub mod skills;
+pub mod experience;
+pub mod projects;
+pub mod contact;
+pub mod blog;
+pub mod upload;
+pub mod admin;

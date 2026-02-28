@@ -1,0 +1,45 @@
+[package]
+name = "pasu-profile-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web framework
+axum = { version = "0.7.5", features = ["multipart"] }
+axum-extra = { version = "0.9", features = ["cookie"] }
+tokio = { version = "1.37.0", features = ["full", "net"] }
+tower-http = { version = "0.5.2", features = ["cors", "trace", "fs"] }
+
+# Swagger UI
+utoipa = { version = "4", features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { version = "6", features = ["axum"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Database
+sqlx = { version = "0.7.4", features = ["runtime-tokio", "tls-native-tls", "postgres", "chrono", "uuid"] }
+
+# Environment variables
+dotenvy = "0.15"
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Password hashing / Cryptography / Utils
+rand = "0.8"
+base64 = "0.22"
+sha1 = "0.10.6"
+
+# Cloudinary HTTP requests (instead of full SDK, we can use reqwest)
+reqwest = { version = "0.12", features = ["json", "multipart"] }
