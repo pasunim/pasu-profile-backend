@@ -6,3 +6,4 @@ pub mod contact;
 pub mod blog;
 pub mod upload;
 pub mod admin;
+pub mod health;

@@ -27,7 +27,9 @@ use utoipa_swagger_ui::SwaggerUi;
         handlers::blog::get_categories,
         handlers::blog::get_tags,
         handlers::admin::login,
-        handlers::upload::upload_image
+        handlers::upload::upload_image,
+        handlers::health::health,
+        handlers::health::readiness
     ),
     components(
         schemas(
@@ -44,11 +46,14 @@ use utoipa_swagger_ui::SwaggerUi;
             handlers::contact::ContactMessagePayload,
             handlers::admin::LoginPayload,
             handlers::admin::LoginResponse,
-            handlers::upload::UploadResponse
+            handlers::upload::UploadResponse,
+            handlers::health::HealthResponse,
+            handlers::health::ReadinessResponse
         )
     ),
     tags(
-        (name = "pasu-profile", description = "Pasu Profile Backend API")
+        (name = "pasu-profile", description = "Pasu Profile Backend API"),
+        (name = "health", description = "Health Check Endpoints")
     )
 )]
 struct ApiDoc;
@@ -105,6 +110,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/admin/login", post(handlers::admin::login))
         // Upload
         .route("/api/upload", post(handlers::upload::upload_image))
+        // Health Checks
+        .route("/health", get(handlers::health::health))
+        .route("/health/ready", get(handlers::health::readiness))
         .layer(cors)
         .with_state(pool);
 
