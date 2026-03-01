@@ -9,6 +9,8 @@ use axum::{
     Router,
 };
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -119,6 +121,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Health Checks
         .route("/health", get(handlers::health::health))
         .route("/health/ready", get(handlers::health::readiness))
+        .layer(
+            TraceLayer::new_for_http()
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO))
+        )
         .layer(cors)
         .with_state(pool);
 
