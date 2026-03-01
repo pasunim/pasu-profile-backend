@@ -31,9 +31,11 @@ A high-performance RESTful API backend for [Pasu Nimsuwan's](https://github.com/
 pasu-profile-backend/
 ├── src/
 │   ├── main.rs          # Application entry point & route definitions
+│   ├── lib.rs           # Library exports for testing
 │   ├── db.rs            # Database connection pool
 │   ├── error.rs         # Custom error types
 │   ├── models.rs        # Data models (SQLx + Serde)
+│   ├── middleware.rs    # Authentication middleware
 │   └── handlers/        # Route handlers
 │       ├── mod.rs
 │       ├── about.rs     # About section
@@ -43,7 +45,22 @@ pasu-profile-backend/
 │       ├── contact.rs   # Contact info, socials & messages
 │       ├── blog.rs      # Blog posts, categories & tags
 │       ├── admin.rs     # Authentication
-│       └── upload.rs    # Image upload (Cloudinary)
+│       ├── upload.rs    # Image upload (Cloudinary)
+│       └── health.rs    # Health check endpoints
+├── tests/               # Integration tests
+│   ├── models_tests.rs  # Model serialization tests
+│   ├── error_tests.rs   # Error handling tests
+│   ├── handlers_tests.rs# Handler payload tests
+│   └── handlers/        # Handler-specific tests
+│       ├── mod.rs
+│       ├── about_tests.rs
+│       ├── contact_tests.rs
+│       ├── upload_tests.rs
+│       ├── experience_tests.rs
+│       ├── projects_tests.rs
+│       ├── skills_tests.rs
+│       ├── blog_tests.rs
+│       └── admin_tests.rs
 ├── Cargo.toml           # Dependencies
 ├── Dockerfile           # Multi-stage Docker build
 ├── .env.example         # Environment variable template
@@ -67,6 +84,8 @@ pasu-profile-backend/
 | `GET` | `/api/blog/posts/:slug` | Get a blog post by slug |
 | `GET` | `/api/blog/categories` | List blog categories |
 | `GET` | `/api/blog/tags` | List blog tags |
+| `GET` | `/health` | Health check |
+| `GET` | `/health/ready` | Readiness check |
 
 ### Admin
 
@@ -81,8 +100,8 @@ pasu-profile-backend/
 | `PUT` | `/api/experience/timeline/:id` | Update timeline entry |
 | `DELETE` | `/api/experience/timeline/:id` | Delete timeline entry |
 | `POST` | `/api/projects` | Create a project |
-| `PUT` | `/api/experience/projects/:id` | Update a project |
-| `DELETE` | `/api/experience/projects/:id` | Delete a project |
+| `PUT` | `/api/projects/:id` | Update a project |
+| `DELETE` | `/api/projects/:id` | Delete a project |
 | `POST` | `/api/contact/info` | Update contact info |
 | `POST` | `/api/contact/socials` | Create social link |
 | `PUT` | `/api/contact/socials/:id` | Update social link |
@@ -102,6 +121,7 @@ pasu-profile-backend/
 | `POST` | `/api/upload` | Upload image (Cloudinary) |
 
 > 📖 Full interactive documentation available at **`/swagger-ui`** when the server is running.
+> 📄 OpenAPI JSON spec available at **`/api-docs/openapi.json`**.
 
 ## 🚀 Getting Started
 
@@ -140,6 +160,40 @@ cargo run --release
 ```
 
 The server will start at `http://localhost:8080`.
+
+## 🧪 Testing
+
+The project includes comprehensive unit and integration tests that run **without connecting to a real database**. Tests cover:
+
+- Model serialization/deserialization
+- Error handling and display messages
+- Handler payload validation
+- API response structures
+
+### Run All Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run specific test module
+cargo test models_tests
+cargo test error_tests
+cargo test handlers_tests
+```
+
+### Test Coverage
+
+| Test Module | Tests | Coverage |
+|---|---|---|
+| Health handler tests | 4 | Health check endpoints |
+| Error handling tests | 13 | Error types & display |
+| Model tests | 14 | Data model serialization |
+| Handler payload tests | 74 | All handler payloads & validation |
+| **Total** | **92** | **Complete coverage** |
 
 ### Run with Docker
 

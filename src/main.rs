@@ -1,8 +1,8 @@
 mod db;
-mod error;
+pub mod error;
 mod handlers;
 mod middleware;
-mod models;
+pub mod models;
 
 use axum::{
     routing::{get, post, put},

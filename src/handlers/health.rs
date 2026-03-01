@@ -4,20 +4,20 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::db::DbPool;
 
 /// Response for the liveness health check.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct HealthResponse {
     pub status: String,
     pub timestamp: String,
 }
 
 /// Response for the readiness health check.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct ReadinessResponse {
     pub status: String,
     pub database: String,
@@ -74,5 +74,58 @@ pub async fn readiness(State(pool): State<DbPool>) -> impl IntoResponse {
                 }),
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_health_response_serialization() {
+        let response = HealthResponse {
+            status: "ok".to_string(),
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("ok"));
+        assert!(json.contains("2024-01-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn test_readiness_response_serialization() {
+        let response = ReadinessResponse {
+            status: "ok".to_string(),
+            database: "connected".to_string(),
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("ok"));
+        assert!(json.contains("connected"));
+        assert!(json.contains("2024-01-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn test_readiness_response_error_serialization() {
+        let response = ReadinessResponse {
+            status: "error".to_string(),
+            database: "disconnected".to_string(),
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("error"));
+        assert!(json.contains("disconnected"));
+    }
+
+    #[test]
+    fn test_readiness_response_deserialization() {
+        let json = r#"{"status":"ok","database":"connected","timestamp":"2024-01-01T00:00:00Z"}"#;
+        let response: ReadinessResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.status, "ok");
+        assert_eq!(response.database, "connected");
+        assert_eq!(response.timestamp, "2024-01-01T00:00:00Z");
     }
 }
