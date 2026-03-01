@@ -1,8 +1,8 @@
 use axum::{extract::{State, Path, Query}, Json};
 use serde::Deserialize;
-use sqlx::{Pool, Postgres};
 use crate::models::{ContactInfo, SocialLink, ContactMessage};
 use crate::error::AppError;
+use crate::state::AppState;
 use utoipa::ToSchema;
 
 #[utoipa::path(
@@ -13,11 +13,11 @@ use utoipa::ToSchema;
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_contact_info(State(pool): State<Pool<Postgres>>) -> Result<Json<ContactInfo>, AppError> {
+pub async fn get_contact_info(State(state): State<AppState>) -> Result<Json<ContactInfo>, AppError> {
     let info = sqlx::query_as::<_, ContactInfo>(
         "SELECT id, email, phone, address, created_at, updated_at FROM contact_info LIMIT 1"
     )
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?;
 
     match info {
@@ -33,13 +33,20 @@ pub async fn get_contact_info(State(pool): State<Pool<Postgres>>) -> Result<Json
         (status = 200, description = "Get social links", body = [SocialLink])
     )
 )]
-pub async fn get_social_links(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<SocialLink>>, AppError> {
+pub async fn get_social_links(State(state): State<AppState>) -> Result<Json<Vec<SocialLink>>, AppError> {
+    let cache_key = String::from("socials");
+    
+    if let Some(cached) = state.socials_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
     let links = sqlx::query_as::<_, SocialLink>(
         "SELECT id, name, url, created_at, updated_at FROM social_links ORDER BY id ASC"
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
+    state.socials_cache.insert(cache_key, links.clone()).await;
     Ok(Json(links))
 }
 
@@ -59,7 +66,7 @@ pub struct ContactMessagePayload {
     )
 )]
 pub async fn submit_contact_message(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<ContactMessagePayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query(
@@ -68,7 +75,7 @@ pub async fn submit_contact_message(
     .bind(&payload.name)
     .bind(&payload.email)
     .bind(&payload.message)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
@@ -83,7 +90,7 @@ pub struct UpdateContactPayload {
 }
 
 pub async fn update_contact_info(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<UpdateContactPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query(
@@ -92,7 +99,7 @@ pub async fn update_contact_info(
     .bind(&payload.email)
     .bind(&payload.phone)
     .bind(&payload.address)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
@@ -106,59 +113,65 @@ pub struct SocialPayload {
 }
 
 pub async fn create_social(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<SocialPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query("INSERT INTO social_links (name, url) VALUES ($1, $2)")
         .bind(&payload.name)
         .bind(&payload.url)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
+
+    state.socials_cache.invalidate(&String::from("socials")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn update_social(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<SocialPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query("UPDATE social_links SET name = $1, url = $2, updated_at = NOW() WHERE id = $3")
         .bind(&payload.name)
         .bind(&payload.url)
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.socials_cache.invalidate(&String::from("socials")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn delete_social(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query("DELETE FROM social_links WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
 
+    state.socials_cache.invalidate(&String::from("socials")).await;
+
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 // Admin: Messages
-pub async fn get_messages(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<ContactMessage>>, AppError> {
+pub async fn get_messages(State(state): State<AppState>) -> Result<Json<Vec<ContactMessage>>, AppError> {
     let messages = sqlx::query_as::<_, ContactMessage>(
         "SELECT id, name, email, message, created_at FROM contact_messages ORDER BY created_at DESC"
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
     Ok(Json(messages))
@@ -171,11 +184,11 @@ pub struct DeleteMessageQuery {
 
 pub async fn delete_message(
     Query(query): Query<DeleteMessageQuery>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query("DELETE FROM contact_messages WHERE id = $1")
         .bind(query.id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {

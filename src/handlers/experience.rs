@@ -1,9 +1,9 @@
 use axum::{extract::{State, Path}, Json};
 use serde::Deserialize;
-use sqlx::{Pool, Postgres};
 use utoipa::ToSchema;
 use crate::models::ExperienceTimeline;
 use crate::error::AppError;
+use crate::state::AppState;
 
 #[utoipa::path(
     get,
@@ -12,13 +12,20 @@ use crate::error::AppError;
         (status = 200, description = "Get experience timeline", body = [ExperienceTimeline])
     )
 )]
-pub async fn get_experience(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<ExperienceTimeline>>, AppError> {
+pub async fn get_experience(State(state): State<AppState>) -> Result<Json<Vec<ExperienceTimeline>>, AppError> {
+    let cache_key = String::from("experience");
+    
+    if let Some(cached) = state.experience_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
     let exp = sqlx::query_as::<_, ExperienceTimeline>(
         "SELECT id, title, company, period, description, skills, categories, tags, details, created_at, updated_at FROM experience_timeline /* force_new_plan */ ORDER BY id DESC"
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
+    state.experience_cache.insert(cache_key, exp.clone()).await;
     Ok(Json(exp))
 }
 
@@ -38,7 +45,7 @@ pub struct TimelinePayload {
 }
 
 pub async fn create_timeline(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<TimelinePayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query(
@@ -52,8 +59,10 @@ pub async fn create_timeline(
     .bind(&payload.categories)
     .bind(&payload.tags)
     .bind(&payload.details)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
+
+    state.experience_cache.invalidate(&String::from("experience")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -71,7 +80,7 @@ pub async fn create_timeline(
 )]
 pub async fn update_timeline(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<TimelinePayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query(
@@ -86,12 +95,14 @@ pub async fn update_timeline(
     .bind(&payload.tags)
     .bind(&payload.details)
     .bind(id)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.experience_cache.invalidate(&String::from("experience")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -108,16 +119,18 @@ pub async fn update_timeline(
 )]
 pub async fn delete_timeline(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query("DELETE FROM experience_timeline WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.experience_cache.invalidate(&String::from("experience")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

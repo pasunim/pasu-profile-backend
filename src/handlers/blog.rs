@@ -1,8 +1,8 @@
 use axum::{extract::{State, Path}, Json};
 use serde::Deserialize;
-use sqlx::{Pool, Postgres};
 use crate::models::{BlogPost, BlogCategory, BlogTag};
 use crate::error::AppError;
+use crate::state::AppState;
 
 #[utoipa::path(
     get,
@@ -11,7 +11,7 @@ use crate::error::AppError;
         (status = 200, description = "Get blog posts", body = [BlogPost])
     )
 )]
-pub async fn get_posts(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<BlogPost>>, AppError> {
+pub async fn get_posts(State(state): State<AppState>) -> Result<Json<Vec<BlogPost>>, AppError> {
     let posts = sqlx::query_as::<_, BlogPost>(
         r#"
 
@@ -42,7 +42,7 @@ FROM blog_posts p
  WHERE p.published = true ORDER BY p.published_at DESC
 "#
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
     Ok(Json(posts))
@@ -61,7 +61,7 @@ FROM blog_posts p
 )]
 pub async fn get_post_by_slug(
     Path(slug): Path<String>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<BlogPost>, AppError> {
     let post = sqlx::query_as::<_, BlogPost>(
         r#"
@@ -94,7 +94,7 @@ FROM blog_posts p
 "#
     )
     .bind(&slug)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?;
 
     match post {
@@ -110,13 +110,20 @@ FROM blog_posts p
         (status = 200, description = "Get blog categories", body = [BlogCategory])
     )
 )]
-pub async fn get_categories(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<BlogCategory>>, AppError> {
+pub async fn get_categories(State(state): State<AppState>) -> Result<Json<Vec<BlogCategory>>, AppError> {
+    let cache_key = String::from("categories");
+    
+    if let Some(cached) = state.categories_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
     let categories = sqlx::query_as::<_, BlogCategory>(
         "SELECT id, name, slug, description, icon, color, created_at, updated_at FROM blog_categories ORDER BY name ASC"
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
+    state.categories_cache.insert(cache_key, categories.clone()).await;
     Ok(Json(categories))
 }
 
@@ -127,13 +134,20 @@ pub async fn get_categories(State(pool): State<Pool<Postgres>>) -> Result<Json<V
         (status = 200, description = "Get blog tags", body = [BlogTag])
     )
 )]
-pub async fn get_tags(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<BlogTag>>, AppError> {
+pub async fn get_tags(State(state): State<AppState>) -> Result<Json<Vec<BlogTag>>, AppError> {
+    let cache_key = String::from("tags");
+    
+    if let Some(cached) = state.tags_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
     let tags = sqlx::query_as::<_, BlogTag>(
         "SELECT id, name, slug, created_at, updated_at FROM blog_tags ORDER BY name ASC"
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
+    state.tags_cache.insert(cache_key, tags.clone()).await;
     Ok(Json(tags))
 }
 
@@ -161,13 +175,13 @@ pub struct BlogPostPayload {
 // GET /api/blog/admin/posts/:id - Get post by ID (admin, includes unpublished)
 pub async fn get_post_by_id(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<BlogPost>, AppError> {
     let post = sqlx::query_as::<_, BlogPost>(
         "SELECT id, uuid::text as uuid, title, slug, excerpt, content, content_markdown, featured_image, author, published, published_at, view_count, reading_time, meta_title, meta_description, meta_keywords, created_at, updated_at FROM blog_posts WHERE id = $1"
     )
     .bind(id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?;
 
     match post {
@@ -178,7 +192,7 @@ pub async fn get_post_by_id(
 
 // POST /api/blog/posts - Create new blog post
 pub async fn create_post(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<BlogPostPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query_scalar::<_, i32>(
@@ -197,7 +211,7 @@ pub async fn create_post(
     .bind(&payload.meta_title)
     .bind(&payload.meta_description)
     .bind(&payload.meta_keywords)
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await?;
 
     let post_id = result;
@@ -208,7 +222,7 @@ pub async fn create_post(
             let _ = sqlx::query("INSERT INTO blog_post_categories (post_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
                 .bind(post_id)
                 .bind(cat_id)
-                .execute(&pool)
+                .execute(&state.pool)
                 .await;
         }
     }
@@ -219,7 +233,7 @@ pub async fn create_post(
             let _ = sqlx::query("INSERT INTO blog_post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
                 .bind(post_id)
                 .bind(tag_id)
-                .execute(&pool)
+                .execute(&state.pool)
                 .await;
         }
     }
@@ -230,7 +244,7 @@ pub async fn create_post(
 // PUT /api/blog/admin/posts/:id - Update blog post
 pub async fn update_post(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<BlogPostPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query(
@@ -250,7 +264,7 @@ pub async fn update_post(
     .bind(&payload.meta_description)
     .bind(&payload.meta_keywords)
     .bind(id)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     if result.rows_affected() == 0 {
@@ -260,7 +274,7 @@ pub async fn update_post(
     // Update categories: delete old, insert new
     sqlx::query("DELETE FROM blog_post_categories WHERE post_id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if let Some(categories) = &payload.categories {
@@ -268,7 +282,7 @@ pub async fn update_post(
             let _ = sqlx::query("INSERT INTO blog_post_categories (post_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
                 .bind(id)
                 .bind(cat_id)
-                .execute(&pool)
+                .execute(&state.pool)
                 .await;
         }
     }
@@ -276,7 +290,7 @@ pub async fn update_post(
     // Update tags: delete old, insert new
     sqlx::query("DELETE FROM blog_post_tags WHERE post_id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if let Some(tags) = &payload.tags {
@@ -284,7 +298,7 @@ pub async fn update_post(
             let _ = sqlx::query("INSERT INTO blog_post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
                 .bind(id)
                 .bind(tag_id)
-                .execute(&pool)
+                .execute(&state.pool)
                 .await;
         }
     }
@@ -295,15 +309,15 @@ pub async fn update_post(
 // DELETE /api/blog/admin/posts/:id
 pub async fn delete_post(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Delete related categories and tags first
-    let _ = sqlx::query("DELETE FROM blog_post_categories WHERE post_id = $1").bind(id).execute(&pool).await;
-    let _ = sqlx::query("DELETE FROM blog_post_tags WHERE post_id = $1").bind(id).execute(&pool).await;
+    let _ = sqlx::query("DELETE FROM blog_post_categories WHERE post_id = $1").bind(id).execute(&state.pool).await;
+    let _ = sqlx::query("DELETE FROM blog_post_tags WHERE post_id = $1").bind(id).execute(&state.pool).await;
 
     let result = sqlx::query("DELETE FROM blog_posts WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
@@ -325,7 +339,7 @@ pub struct CategoryPayload {
 }
 
 pub async fn create_category(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<CategoryPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query("INSERT INTO blog_categories (name, slug, description, icon, color) VALUES ($1, $2, $3, $4, $5)")
@@ -334,15 +348,17 @@ pub async fn create_category(
         .bind(&payload.description)
         .bind(&payload.icon)
         .bind(&payload.color)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
+
+    state.categories_cache.invalidate(&String::from("categories")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn update_category(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<CategoryPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query("UPDATE blog_categories SET name = $1, slug = $2, description = $3, icon = $4, color = $5, updated_at = NOW() WHERE id = $6")
@@ -352,29 +368,33 @@ pub async fn update_category(
         .bind(&payload.icon)
         .bind(&payload.color)
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.categories_cache.invalidate(&String::from("categories")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn delete_category(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let _ = sqlx::query("DELETE FROM blog_post_categories WHERE category_id = $1").bind(id).execute(&pool).await;
+    let _ = sqlx::query("DELETE FROM blog_post_categories WHERE category_id = $1").bind(id).execute(&state.pool).await;
     let result = sqlx::query("DELETE FROM blog_categories WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.categories_cache.invalidate(&String::from("categories")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -388,50 +408,56 @@ pub struct TagPayload {
 }
 
 pub async fn create_tag(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<TagPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query("INSERT INTO blog_tags (name, slug) VALUES ($1, $2)")
         .bind(&payload.name)
         .bind(&payload.slug)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
+
+    state.tags_cache.invalidate(&String::from("tags")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn update_tag(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<TagPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query("UPDATE blog_tags SET name = $1, slug = $2, updated_at = NOW() WHERE id = $3")
         .bind(&payload.name)
         .bind(&payload.slug)
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.tags_cache.invalidate(&String::from("tags")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn delete_tag(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let _ = sqlx::query("DELETE FROM blog_post_tags WHERE tag_id = $1").bind(id).execute(&pool).await;
+    let _ = sqlx::query("DELETE FROM blog_post_tags WHERE tag_id = $1").bind(id).execute(&state.pool).await;
     let result = sqlx::query("DELETE FROM blog_tags WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.tags_cache.invalidate(&String::from("tags")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

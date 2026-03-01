@@ -1,8 +1,12 @@
+mod cache;
 mod db;
 pub mod error;
 mod handlers;
 mod middleware;
 pub mod models;
+mod state;
+
+use state::AppState;
 
 use axum::{
     routing::{get, post, put},
@@ -75,6 +79,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pool = db::init_pool().await?;
 
+    let state = AppState {
+        pool: pool.clone(),
+        about_cache: crate::cache::AppCache::new(100, 300),
+        skills_cache: crate::cache::AppCache::new(100, 300),
+        experience_cache: crate::cache::AppCache::new(100, 300),
+        projects_cache: crate::cache::AppCache::new(100, 300),
+        socials_cache: crate::cache::AppCache::new(100, 300),
+        categories_cache: crate::cache::AppCache::new(100, 300),
+        tags_cache: crate::cache::AppCache::new(100, 300),
+    };
+
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -127,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .on_response(DefaultOnResponse::new().level(Level::INFO))
         )
         .layer(cors)
-        .with_state(pool);
+        .with_state(state);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{}", port);

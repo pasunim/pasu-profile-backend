@@ -1,8 +1,8 @@
 use axum::{extract::{State, Path}, Json};
 use serde::Deserialize;
-use sqlx::{Pool, Postgres};
 use crate::models::Project;
 use crate::error::AppError;
+use crate::state::AppState;
 
 #[utoipa::path(
     get,
@@ -11,13 +11,20 @@ use crate::error::AppError;
         (status = 200, description = "Get all projects", body = [Project])
     )
 )]
-pub async fn get_projects(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<Project>>, AppError> {
+pub async fn get_projects(State(state): State<AppState>) -> Result<Json<Vec<Project>>, AppError> {
+    let cache_key = String::from("projects");
+    
+    if let Some(cached) = state.projects_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
     let projects = sqlx::query_as::<_, Project>(
         "SELECT id, title, description, image, skills, link, is_active, created_at, updated_at FROM projects ORDER BY id DESC"
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
+    state.projects_cache.insert(cache_key, projects.clone()).await;
     Ok(Json(projects))
 }
 
@@ -32,7 +39,7 @@ pub struct ProjectPayload {
 }
 
 pub async fn create_project(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<ProjectPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query(
@@ -40,19 +47,21 @@ pub async fn create_project(
     )
     .bind(&payload.title)
     .bind(&payload.description)
-    .bind(&payload.image.unwrap_or_default())
+    .bind(payload.image.unwrap_or_default())
     .bind(&payload.skills)
-    .bind(&payload.link.unwrap_or_default())
+    .bind(payload.link.unwrap_or_default())
     .bind(payload.is_active.unwrap_or(true))
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
+
+    state.projects_cache.invalidate(&String::from("projects")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn update_project(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<ProjectPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query(
@@ -60,33 +69,37 @@ pub async fn update_project(
     )
     .bind(&payload.title)
     .bind(&payload.description)
-    .bind(&payload.image.unwrap_or_default())
+    .bind(payload.image.unwrap_or_default())
     .bind(&payload.skills)
-    .bind(&payload.link.unwrap_or_default())
+    .bind(payload.link.unwrap_or_default())
     .bind(payload.is_active.unwrap_or(true))
     .bind(id)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
 
+    state.projects_cache.invalidate(&String::from("projects")).await;
+
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn delete_project(
     Path(id): Path<i32>,
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query("DELETE FROM projects WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    state.projects_cache.invalidate(&String::from("projects")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

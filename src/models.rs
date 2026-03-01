@@ -5,7 +5,7 @@ use chrono::NaiveDateTime;
 
 // Formats for uuid, etc. Although schema uses SERIAL (int) for IDs.
 
-#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct About {
     pub id: i32,
     pub user_bio: String,
@@ -20,7 +20,7 @@ pub struct About {
     pub tags: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Skill {
     pub id: i32,
     pub icon: String,
@@ -36,7 +36,7 @@ pub struct Skill {
     pub tags: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct ExperienceTimeline {
     pub id: i32,
     pub title: String,
@@ -57,7 +57,7 @@ pub struct ExperienceTimeline {
     pub details: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Project {
     pub id: i32,
     pub title: String,
@@ -92,7 +92,7 @@ pub struct ContactInfo {
     pub tags: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct SocialLink {
     pub id: i32,
     pub name: String,
@@ -117,7 +117,7 @@ pub struct ContactMessage {
 }
 
 // Blog
-#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct BlogCategory {
     pub id: i32,
     pub name: String,
@@ -135,7 +135,7 @@ pub struct BlogCategory {
     pub tags: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct BlogTag {
     pub id: i32,
     pub name: String,

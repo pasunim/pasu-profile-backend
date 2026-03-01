@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::db::DbPool;
+use crate::state::AppState;
 
 /// Response for the liveness health check.
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -51,10 +51,10 @@ pub async fn health() -> impl IntoResponse {
     ),
     tag = "health"
 )]
-pub async fn readiness(State(pool): State<DbPool>) -> impl IntoResponse {
+pub async fn readiness(State(state): State<AppState>) -> impl IntoResponse {
     let now = chrono::Utc::now().to_rfc3339();
 
-    match sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&pool).await {
+    match sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&state.pool).await {
         Ok(_) => (
             StatusCode::OK,
             Json(ReadinessResponse {

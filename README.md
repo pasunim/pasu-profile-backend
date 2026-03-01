@@ -33,6 +33,8 @@ pasu-profile-backend/
 │   ├── main.rs          # Application entry point & route definitions
 │   ├── lib.rs           # Library exports for testing
 │   ├── db.rs            # Database connection pool
+│   ├── state.rs         # Centralized application state (AppState)
+│   ├── cache.rs         # In-memory caching implementation (Moka)
 │   ├── error.rs         # Custom error types
 │   ├── models.rs        # Data models (SQLx + Serde)
 │   ├── middleware.rs    # Authentication middleware
@@ -123,6 +125,30 @@ pasu-profile-backend/
 > 📖 Full interactive documentation available at **`/swagger-ui`** when the server is running.
 > 📄 OpenAPI JSON spec available at **`/api-docs/openapi.json`**.
 
+## ⚡ Caching
+
+The application uses **Moka** for high-performance in-memory caching to reduce database load and improve response times.
+
+### Cached Endpoints
+
+| Endpoint | Cache Key | TTL | Invalidation |
+|---|---|---|---|
+| `GET /api/projects` | `"projects"` | Default | POST/PUT/DELETE /api/projects |
+| `GET /api/blog/categories` | `"categories"` | Default | POST/PUT/DELETE /api/blog/categories |
+| `GET /api/blog/tags` | `"tags"` | Default | POST/PUT/DELETE /api/blog/tags |
+| `GET /api/contact/socials` | `"socials"` | Default | POST/PUT/DELETE /api/contact/socials |
+| `GET /api/about` | `"about"` | Default | POST /api/about |
+| `GET /api/experience` | `"experience"` | Default | POST/PUT/DELETE /api/experience/timeline |
+| `GET /api/skills` | `"skills"` | Default | POST/PUT/DELETE /api/skills |
+
+### How Caching Works
+
+1. **GET Request** → Check cache → Return cached data if available → Otherwise query DB and store in cache
+2. **Write Operations** → Execute DB query → Invalidate related cache entries
+3. **Next GET Request** → Cache miss → Query DB → Store fresh data in cache
+
+Cache entries automatically expire after their TTL (Time-to-Live) elapses, ensuring data freshness.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -183,6 +209,19 @@ cargo test -- --nocapture
 cargo test models_tests
 cargo test error_tests
 cargo test handlers_tests
+```
+
+### Code Quality
+
+```bash
+# Check for errors and warnings
+cargo build
+
+# Run linter for code quality
+cargo clippy --all-targets --all-features
+
+# Fix clippy warnings automatically
+cargo clippy --fix --allow-dirty
 ```
 
 ### Test Coverage

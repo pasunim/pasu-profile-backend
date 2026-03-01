@@ -1,8 +1,8 @@
 use axum::{extract::State, Json};
 use serde::Deserialize;
-use sqlx::{Pool, Postgres};
 use crate::models::About;
 use crate::error::AppError;
+use crate::state::AppState;
 
 #[utoipa::path(
     get,
@@ -12,15 +12,24 @@ use crate::error::AppError;
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_about(State(pool): State<Pool<Postgres>>) -> Result<Json<About>, AppError> {
+pub async fn get_about(State(state): State<AppState>) -> Result<Json<About>, AppError> {
+    let cache_key = String::from("about");
+    
+    if let Some(cached) = state.about_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
     let about = sqlx::query_as::<_, About>(
         "SELECT id, user_bio, user_bio2, created_at, updated_at FROM about LIMIT 1"
     )
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?;
 
     match about {
-        Some(a) => Ok(Json(a)),
+        Some(a) => {
+            state.about_cache.insert(cache_key.clone(), a.clone()).await;
+            Ok(Json(a))
+        }
         None => Err(AppError::NotFound),
     }
 }
@@ -34,7 +43,7 @@ pub struct UpdateAboutPayload {
 }
 
 pub async fn update_about(
-    State(pool): State<Pool<Postgres>>,
+    State(state): State<AppState>,
     Json(payload): Json<UpdateAboutPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user_bio = payload.user_bio.unwrap_or_default();
@@ -45,8 +54,10 @@ pub async fn update_about(
     )
     .bind(&user_bio)
     .bind(&user_bio2)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
+
+    state.about_cache.invalidate(&String::from("about")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

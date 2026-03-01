@@ -99,7 +99,7 @@ pub async fn upload_image(mut multipart: Multipart) -> Result<Json<UploadRespons
         .part("file", file_part);
 
     let res = client
-        .post(&format!("https://api.cloudinary.com/v1_1/{}/image/upload", cloud_name))
+        .post(format!("https://api.cloudinary.com/v1_1/{}/image/upload", cloud_name))
         .multipart(form)
         .send()
         .await
