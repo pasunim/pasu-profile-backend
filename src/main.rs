@@ -1,6 +1,7 @@
 mod db;
 mod error;
 mod handlers;
+mod middleware;
 mod models;
 
 use axum::{
@@ -77,8 +78,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
+    let swagger_router = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .route_layer(axum::middleware::from_fn(middleware::auth_middleware));
+
+    let app = Router::new()
+        .merge(swagger_router)
+        .route("/", get(|| async { "Welcome to PASU.APP" }))
         // Public: About
         .route("/api/about", get(handlers::about::get_about).post(handlers::about::update_about))
         // Public + Admin: Skills

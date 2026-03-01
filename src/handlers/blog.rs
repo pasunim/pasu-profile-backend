@@ -13,7 +13,34 @@ use crate::error::AppError;
 )]
 pub async fn get_posts(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<BlogPost>>, AppError> {
     let posts = sqlx::query_as::<_, BlogPost>(
-        "SELECT * FROM blog_posts WHERE published = true ORDER BY published_at DESC"
+        r#"
+
+SELECT p.id, p.uuid::text as uuid, p.title, p.slug, p.excerpt, p.content, p.content_markdown, p.featured_image, p.author, p.published, p.published_at, p.view_count, p.reading_time, p.meta_title, p.meta_description, p.meta_keywords, p.created_at, p.updated_at,
+    (
+        SELECT COALESCE(json_agg(jsonb_build_object(
+        'id', c.id,
+        'name', c.name,
+        'slug', c.slug,
+        'icon', c.icon,
+        'color', c.color
+        )), '[]'::json)
+        FROM blog_post_categories pc
+        JOIN blog_categories c ON pc.category_id = c.id
+        WHERE pc.post_id = p.id
+    ) as categories,
+    (
+        SELECT COALESCE(json_agg(jsonb_build_object(
+        'id', t.id,
+        'name', t.name,
+        'slug', t.slug
+        )), '[]'::json)
+        FROM blog_post_tags pt
+        JOIN blog_tags t ON pt.tag_id = t.id
+        WHERE pt.post_id = p.id
+    ) as tags
+FROM blog_posts p
+ WHERE p.published = true ORDER BY p.published_at DESC
+"#
     )
     .fetch_all(&pool)
     .await?;
@@ -37,7 +64,34 @@ pub async fn get_post_by_slug(
     State(pool): State<Pool<Postgres>>,
 ) -> Result<Json<BlogPost>, AppError> {
     let post = sqlx::query_as::<_, BlogPost>(
-        "SELECT * FROM blog_posts WHERE slug = $1 AND published = true"
+        r#"
+
+SELECT p.id, p.uuid::text as uuid, p.title, p.slug, p.excerpt, p.content, p.content_markdown, p.featured_image, p.author, p.published, p.published_at, p.view_count, p.reading_time, p.meta_title, p.meta_description, p.meta_keywords, p.created_at, p.updated_at,
+    (
+        SELECT COALESCE(json_agg(jsonb_build_object(
+        'id', c.id,
+        'name', c.name,
+        'slug', c.slug,
+        'icon', c.icon,
+        'color', c.color
+        )), '[]'::json)
+        FROM blog_post_categories pc
+        JOIN blog_categories c ON pc.category_id = c.id
+        WHERE pc.post_id = p.id
+    ) as categories,
+    (
+        SELECT COALESCE(json_agg(jsonb_build_object(
+        'id', t.id,
+        'name', t.name,
+        'slug', t.slug
+        )), '[]'::json)
+        FROM blog_post_tags pt
+        JOIN blog_tags t ON pt.tag_id = t.id
+        WHERE pt.post_id = p.id
+    ) as tags
+FROM blog_posts p
+ WHERE (p.slug = $1 OR p.uuid::text = $1) AND p.published = true
+"#
     )
     .bind(&slug)
     .fetch_optional(&pool)
@@ -58,7 +112,7 @@ pub async fn get_post_by_slug(
 )]
 pub async fn get_categories(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<BlogCategory>>, AppError> {
     let categories = sqlx::query_as::<_, BlogCategory>(
-        "SELECT * FROM blog_categories ORDER BY name ASC"
+        "SELECT id, name, slug, description, icon, color, created_at, updated_at FROM blog_categories ORDER BY name ASC"
     )
     .fetch_all(&pool)
     .await?;
@@ -75,7 +129,7 @@ pub async fn get_categories(State(pool): State<Pool<Postgres>>) -> Result<Json<V
 )]
 pub async fn get_tags(State(pool): State<Pool<Postgres>>) -> Result<Json<Vec<BlogTag>>, AppError> {
     let tags = sqlx::query_as::<_, BlogTag>(
-        "SELECT * FROM blog_tags ORDER BY name ASC"
+        "SELECT id, name, slug, created_at, updated_at FROM blog_tags ORDER BY name ASC"
     )
     .fetch_all(&pool)
     .await?;
@@ -110,7 +164,7 @@ pub async fn get_post_by_id(
     State(pool): State<Pool<Postgres>>,
 ) -> Result<Json<BlogPost>, AppError> {
     let post = sqlx::query_as::<_, BlogPost>(
-        "SELECT * FROM blog_posts WHERE id = $1"
+        "SELECT id, uuid::text as uuid, title, slug, excerpt, content, content_markdown, featured_image, author, published, published_at, view_count, reading_time, meta_title, meta_description, meta_keywords, created_at, updated_at FROM blog_posts WHERE id = $1"
     )
     .bind(id)
     .fetch_optional(&pool)

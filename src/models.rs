@@ -12,6 +12,12 @@ pub struct About {
     pub user_bio2: String,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
@@ -22,6 +28,12 @@ pub struct Skill {
     pub description: String,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
@@ -34,6 +46,12 @@ pub struct ExperienceTimeline {
     pub skills: Option<Vec<String>>,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
@@ -47,6 +65,12 @@ pub struct Project {
     pub is_active: Option<bool>,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
@@ -57,6 +81,12 @@ pub struct ContactInfo {
     pub address: String,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
@@ -66,6 +96,12 @@ pub struct SocialLink {
     pub url: String,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
@@ -88,6 +124,12 @@ pub struct BlogCategory {
     pub color: Option<String>,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
@@ -97,11 +139,18 @@ pub struct BlogTag {
     pub slug: String,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct BlogPost {
     pub id: i32,
+    pub uuid: Option<String>,
     pub title: String,
     pub slug: String,
     pub excerpt: String,
@@ -118,4 +167,10 @@ pub struct BlogPost {
     pub meta_keywords: Option<Vec<String>>,
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub tags: Option<serde_json::Value>,
 }

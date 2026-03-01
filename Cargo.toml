@@ -11,15 +11,15 @@ tokio = { version = "1.37.0", features = ["full", "net"] }
 tower-http = { version = "0.5.2", features = ["cors", "trace", "fs"] }
 
 # Swagger UI
-utoipa = { version = "4", features = ["axum_extras", "chrono"] }
-utoipa-swagger-ui = { version = "6", features = ["axum"] }
+utoipa = { version = "5", features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { version = "8", features = ["axum"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Database
-sqlx = { version = "0.7.4", features = ["runtime-tokio", "tls-native-tls", "postgres", "chrono", "uuid"] }
+sqlx = { version = "0.8.2", default-features = false, features = ["runtime-tokio", "tls-native-tls", "postgres", "macros", "chrono", "uuid"] }
 
 # Environment variables
 dotenvy = "0.15"
@@ -27,6 +27,7 @@ dotenvy = "0.15"
 # Date/Time
 chrono = { version = "0.4", features = ["serde"] }
 time = "0.3"
+uuid = { version = "1.8", features = ["serde", "v4"] }
 
 # Error handling
 thiserror = "1.0"
