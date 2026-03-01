@@ -2,7 +2,6 @@ use axum::{http::StatusCode, response::IntoResponse};
 use pasu_profile_backend::error::AppError;
 use sqlx::Error as SqlxError;
 use std::env::VarError;
-use thiserror::Error;
 
 #[test]
 fn test_app_error_not_found() {

@@ -83,11 +83,36 @@ fn test_experience_timeline_serialization() {
         updated_at: None,
         categories: None,
         tags: None,
+        details: None,
     };
 
     let json = serde_json::to_string(&experience).unwrap();
     assert!(json.contains("Senior Developer"));
     assert!(json.contains("Tech Corp"));
+}
+
+#[test]
+fn test_experience_timeline_with_details() {
+    let experience = ExperienceTimeline {
+        id: 1,
+        title: "Senior Developer".to_string(),
+        company: "Tech Corp".to_string(),
+        period: "2020-2024".to_string(),
+        description: "Building awesome things".to_string(),
+        skills: Some(vec!["Rust".to_string(), "PostgreSQL".to_string()]),
+        created_at: None,
+        updated_at: None,
+        categories: Some(serde_json::json!(["engineering"])),
+        tags: Some(serde_json::json!(["backend", "senior"])),
+        details: Some(serde_json::json!(["Led team of 5 developers", "Implemented CI/CD"])),
+    };
+
+    let json = serde_json::to_string(&experience).unwrap();
+    let parsed: ExperienceTimeline = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.title, "Senior Developer");
+    assert!(parsed.categories.is_some());
+    assert!(parsed.tags.is_some());
+    assert!(parsed.details.is_some());
 }
 
 #[test]

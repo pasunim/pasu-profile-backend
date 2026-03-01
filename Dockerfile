@@ -10,12 +10,24 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy the source code
-COPY Cargo.toml ./
+# Copy Cargo.toml and Cargo.lock first for better caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create dummy src directory for dependency caching
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "" > src/lib.rs
+
+# Build dependencies (cached layer)
+RUN cargo build --release && \
+    rm -rf src
+
+# Copy actual source code
 COPY src ./src
 
-# Build the application in release mode
-RUN cargo build --release
+# Build the application (only recompiles changed files)
+RUN touch src/main.rs && \
+    cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim

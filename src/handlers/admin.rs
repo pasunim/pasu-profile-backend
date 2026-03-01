@@ -1,7 +1,6 @@
-use axum::{extract::State, Json};
+use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::env;
-use sqlx::{Pool, Postgres};
 use crate::error::AppError;
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use utoipa::ToSchema;

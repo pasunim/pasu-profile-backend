@@ -52,6 +52,9 @@ pub struct ExperienceTimeline {
     #[serde(default)]
     #[sqlx(default)]
     pub tags: Option<serde_json::Value>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub details: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
