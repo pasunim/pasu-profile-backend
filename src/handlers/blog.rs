@@ -4,6 +4,18 @@ use crate::models::{BlogPost, BlogCategory, BlogTag};
 use crate::error::AppError;
 use crate::state::AppState;
 
+/// Generate a URL-friendly slug from text
+fn slugify(text: &str) -> String {
+    text.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<&str>>()
+        .join("-")
+}
+
 #[utoipa::path(
     get,
     path = "/api/blog/posts",
@@ -156,7 +168,7 @@ pub async fn get_tags(State(state): State<AppState>) -> Result<Json<Vec<BlogTag>
 #[derive(Deserialize)]
 pub struct BlogPostPayload {
     pub title: String,
-    pub slug: String,
+    pub slug: Option<String>,
     pub excerpt: String,
     pub content: String,
     pub content_markdown: Option<String>,
@@ -195,11 +207,16 @@ pub async fn create_post(
     State(state): State<AppState>,
     Json(payload): Json<BlogPostPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    let slug = match &payload.slug {
+        Some(s) if !s.is_empty() => s.clone(),
+        _ => slugify(&payload.title),
+    };
+
     let result = sqlx::query_scalar::<_, i32>(
         "INSERT INTO blog_posts (title, slug, excerpt, content, content_markdown, featured_image, author, published, published_at, reading_time, meta_title, meta_description, meta_keywords) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamp, NOW()), $10, $11, $12, $13) RETURNING id"
     )
     .bind(&payload.title)
-    .bind(&payload.slug)
+    .bind(&slug)
     .bind(&payload.excerpt)
     .bind(&payload.content)
     .bind(&payload.content_markdown)
@@ -247,11 +264,16 @@ pub async fn update_post(
     State(state): State<AppState>,
     Json(payload): Json<BlogPostPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    let slug = match &payload.slug {
+        Some(s) if !s.is_empty() => s.clone(),
+        _ => slugify(&payload.title),
+    };
+
     let result = sqlx::query(
         "UPDATE blog_posts SET title = $1, slug = $2, excerpt = $3, content = $4, content_markdown = $5, featured_image = $6, author = $7, published = $8, published_at = COALESCE($9::timestamp, published_at), reading_time = $10, meta_title = $11, meta_description = $12, meta_keywords = $13, updated_at = NOW() WHERE id = $14"
     )
     .bind(&payload.title)
-    .bind(&payload.slug)
+    .bind(&slug)
     .bind(&payload.excerpt)
     .bind(&payload.content)
     .bind(&payload.content_markdown)
