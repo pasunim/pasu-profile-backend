@@ -1,8 +1,14 @@
-use axum::{extract::{State, Path}, Json};
+use axum::{extract::{State, Path, Query}, Json};
 use serde::Deserialize;
 use crate::models::Project;
 use crate::error::AppError;
 use crate::state::AppState;
+
+#[derive(Deserialize, Debug)]
+pub struct ProjectQuery {
+    pub admin: Option<String>,
+}
+
 
 #[utoipa::path(
     get,
@@ -11,18 +17,31 @@ use crate::state::AppState;
         (status = 200, description = "Get all projects", body = [Project])
     )
 )]
-pub async fn get_projects(State(state): State<AppState>) -> Result<Json<Vec<Project>>, AppError> {
-    let cache_key = String::from("projects");
+pub async fn get_projects(
+    State(state): State<AppState>,
+    query: Option<Query<ProjectQuery>>,
+) -> Result<Json<Vec<Project>>, AppError> {
+    let is_admin = query.and_then(|q| q.0.admin).map(|a| a == "true").unwrap_or(false);
     
+    let cache_key = if is_admin {
+        String::from("projects_admin")
+    } else {
+        String::from("projects")
+    };
+
     if let Some(cached) = state.projects_cache.get(&cache_key).await {
         return Ok(Json(cached));
     }
 
-    let projects = sqlx::query_as::<_, Project>(
+    let query_str = if is_admin {
         "SELECT id, title, description, image, skills, link, is_active, created_at, updated_at FROM projects ORDER BY id DESC"
-    )
-    .fetch_all(&state.pool)
-    .await?;
+    } else {
+        "SELECT id, title, description, image, skills, link, is_active, created_at, updated_at FROM projects WHERE is_active = true ORDER BY id DESC"
+    };
+
+    let projects = sqlx::query_as::<_, Project>(query_str)
+        .fetch_all(&state.pool)
+        .await?;
 
     state.projects_cache.insert(cache_key, projects.clone()).await;
     Ok(Json(projects))
@@ -55,6 +74,7 @@ pub async fn create_project(
     .await?;
 
     state.projects_cache.invalidate(&String::from("projects")).await;
+    state.projects_cache.invalidate(&String::from("projects_admin")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -82,6 +102,7 @@ pub async fn update_project(
     }
 
     state.projects_cache.invalidate(&String::from("projects")).await;
+    state.projects_cache.invalidate(&String::from("projects_admin")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -100,6 +121,7 @@ pub async fn delete_project(
     }
 
     state.projects_cache.invalidate(&String::from("projects")).await;
+    state.projects_cache.invalidate(&String::from("projects_admin")).await;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
