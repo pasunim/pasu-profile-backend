@@ -1,5 +1,6 @@
 use sqlx::{Pool, Postgres};
 use crate::cache::AppCache;
+use crate::ratelimit::LoginRateLimiter;
 use crate::models::{About, Skill, ExperienceTimeline, Project, SocialLink, BlogCategory, BlogTag};
 
 #[derive(Clone)]
@@ -12,4 +13,5 @@ pub struct AppState {
     pub socials_cache: AppCache<String, Vec<SocialLink>>,
     pub categories_cache: AppCache<String, Vec<BlogCategory>>,
     pub tags_cache: AppCache<String, Vec<BlogTag>>,
+    pub login_limiter: LoginRateLimiter,
 }

@@ -19,6 +19,27 @@ struct CloudinaryResponse {
     public_id: String,
 }
 
+/// Sniff the leading bytes and return the real image type, or `None` when the
+/// payload is not one of the formats we accept (JPEG, PNG, GIF, WebP).
+fn detect_image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() < 12 {
+        return None;
+    }
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Some("image/jpeg");
+    }
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        return Some("image/png");
+    }
+    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        return Some("image/gif");
+    }
+    if bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        return Some("image/webp");
+    }
+    None
+}
+
 #[utoipa::path(
     post,
     path = "/api/upload",
@@ -30,13 +51,9 @@ struct CloudinaryResponse {
 )]
 pub async fn upload_image(mut multipart: Multipart) -> Result<Json<UploadResponse>, AppError> {
     let mut file_bytes = Vec::new();
-    let mut mime_type = String::new();
 
     while let Some(field) = multipart.next_field().await.map_err(|e| AppError::UploadError(e.to_string()))? {
         if field.name() == Some("file") {
-            if let Some(content_type) = field.content_type() {
-                mime_type = content_type.to_string();
-            }
             file_bytes = field.bytes().await.map_err(|e| AppError::UploadError(e.to_string()))?.to_vec();
             break;
         }
@@ -46,14 +63,18 @@ pub async fn upload_image(mut multipart: Multipart) -> Result<Json<UploadRespons
         return Err(AppError::ValidationError("No file uploaded".to_string()));
     }
 
-    let allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
-    if !allowed_types.contains(&mime_type.as_str()) {
-        return Err(AppError::ValidationError("Invalid file type. Only images are allowed.".to_string()));
-    }
-
     if file_bytes.len() > 5 * 1024 * 1024 {
         return Err(AppError::ValidationError("File size too large. Max 5MB.".to_string()));
     }
+
+    // The declared Content-Type is both attacker-controlled and unreliable —
+    // browsers send `application/octet-stream` for a file whose type the OS
+    // cannot infer — so the bytes decide. The sniffed type is what we forward.
+    let Some(detected_mime) = detect_image_mime(&file_bytes) else {
+        return Err(AppError::ValidationError(
+            "Invalid file type. Only images are allowed.".to_string(),
+        ));
+    };
 
     let cloudinary_url = env::var("CLOUDINARY_URL").map_err(|_| AppError::InternalError(anyhow::anyhow!("CLOUDINARY_URL not set")))?;
     
@@ -88,7 +109,7 @@ pub async fn upload_image(mut multipart: Multipart) -> Result<Json<UploadRespons
     let client = reqwest::Client::new();
     let file_part = multipart::Part::bytes(file_bytes)
         .file_name("upload.img")
-        .mime_str(&mime_type)
+        .mime_str(detected_mime)
         .map_err(|e| AppError::InternalError(e.into()))?;
 
     let form = multipart::Form::new()
@@ -109,7 +130,10 @@ pub async fn upload_image(mut multipart: Multipart) -> Result<Json<UploadRespons
     let res_text = res.text().await.unwrap_or_default();
 
     if !res_status.is_success() {
-        return Err(AppError::UploadError(format!("Cloudinary error: {}", res_text)));
+        tracing::error!("Cloudinary upload failed ({}): {}", res_status, res_text);
+        return Err(AppError::UploadError(
+            "Image upload failed. Please try again.".to_string(),
+        ));
     }
 
     let parsed: CloudinaryResponse = serde_json::from_str(&res_text)
@@ -120,4 +144,36 @@ pub async fn upload_image(mut multipart: Multipart) -> Result<Json<UploadRespons
         url: parsed.secure_url,
         public_id: parsed.public_id,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::detect_image_mime;
+
+    #[test]
+    fn detects_each_supported_format() {
+        let mut png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        png.extend_from_slice(&[0u8; 8]);
+        assert_eq!(detect_image_mime(&png), Some("image/png"));
+
+        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        jpeg.extend_from_slice(&[0u8; 8]);
+        assert_eq!(detect_image_mime(&jpeg), Some("image/jpeg"));
+
+        let mut webp = b"RIFF\0\0\0\0WEBP".to_vec();
+        webp.extend_from_slice(&[0u8; 4]);
+        assert_eq!(detect_image_mime(&webp), Some("image/webp"));
+
+        let mut gif = b"GIF89a".to_vec();
+        gif.extend_from_slice(&[0u8; 8]);
+        assert_eq!(detect_image_mime(&gif), Some("image/gif"));
+    }
+
+    #[test]
+    fn rejects_non_image_payloads() {
+        // A script renamed to .png with a spoofed Content-Type.
+        assert_eq!(detect_image_mime(b"<?php system($_GET[0]); ?>   "), None);
+        assert_eq!(detect_image_mime(b"too short"), None);
+        assert_eq!(detect_image_mime(&[]), None);
+    }
 }

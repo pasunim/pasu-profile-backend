@@ -20,7 +20,7 @@ pub async fn get_experience(State(state): State<AppState>) -> Result<Json<Vec<Ex
     }
 
     let exp = sqlx::query_as::<_, ExperienceTimeline>(
-        "SELECT id, title, company, period, description, skills, categories, tags, details, created_at, updated_at FROM experience_timeline /* force_new_plan */ ORDER BY id DESC"
+        "SELECT id, title, company, period, description, skills, categories, tags, details, created_at, updated_at FROM experience_timeline ORDER BY id DESC"
     )
     .fetch_all(&state.pool)
     .await?;

@@ -46,16 +46,18 @@ pub async fn update_about(
     State(state): State<AppState>,
     Json(payload): Json<UpdateAboutPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let user_bio = payload.user_bio.unwrap_or_default();
-    let user_bio2 = payload.user_bio2.unwrap_or_default();
-
-    sqlx::query(
-        "UPDATE about SET user_bio = $1, user_bio2 = $2, updated_at = NOW() WHERE id = (SELECT id FROM about LIMIT 1)"
+    // COALESCE so omitting a field leaves it untouched rather than blanking it.
+    let result = sqlx::query(
+        "UPDATE about SET user_bio = COALESCE($1, user_bio), user_bio2 = COALESCE($2, user_bio2), updated_at = NOW() WHERE id = (SELECT id FROM about LIMIT 1)"
     )
-    .bind(&user_bio)
-    .bind(&user_bio2)
+    .bind(&payload.user_bio)
+    .bind(&payload.user_bio2)
     .execute(&state.pool)
     .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
 
     state.about_cache.invalidate(&String::from("about")).await;
 

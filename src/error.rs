@@ -26,6 +26,9 @@ pub enum AppError {
     #[error("Upload error: {0}")]
     UploadError(String),
 
+    #[error("Too many requests")]
+    RateLimited,
+
     #[error("Internal server error: {0}")]
     InternalError(#[from] anyhow::Error),
 }
@@ -42,8 +45,12 @@ impl IntoResponse for AppError {
             AppError::ValidationError(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::UploadError(msg) => {
                 tracing::error!("Upload error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("Upload error: {}", msg))
+                (StatusCode::BAD_GATEWAY, msg)
             }
+            AppError::RateLimited => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่".to_string(),
+            ),
             _ => {
                 tracing::error!("Internal server error: {:?}", self);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error".to_string())

@@ -93,7 +93,7 @@ pub async fn update_contact_info(
     State(state): State<AppState>,
     Json(payload): Json<UpdateContactPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE contact_info SET email = COALESCE($1, email), phone = COALESCE($2, phone), address = COALESCE($3, address), updated_at = NOW() WHERE id = (SELECT id FROM contact_info LIMIT 1)"
     )
     .bind(&payload.email)
@@ -101,6 +101,10 @@ pub async fn update_contact_info(
     .bind(&payload.address)
     .execute(&state.pool)
     .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

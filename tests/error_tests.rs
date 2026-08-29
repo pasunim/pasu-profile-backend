@@ -26,9 +26,18 @@ fn test_app_error_validation_error() {
 
 #[test]
 fn test_app_error_upload_error() {
+    // An upload failure is an upstream (Cloudinary) problem, not a fault in
+    // this service, so it surfaces as 502 rather than 500.
     let error = AppError::UploadError("Upload failed".to_string());
     let response = error.into_response();
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+}
+
+#[test]
+fn test_app_error_rate_limited() {
+    let error = AppError::RateLimited;
+    let response = error.into_response();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
 #[test]

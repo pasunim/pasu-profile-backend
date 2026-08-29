@@ -91,9 +91,24 @@ pasu-profile-backend/
 
 ### Admin
 
+All endpoints in this section require HTTP Basic authentication using
+`ADMIN_PASSWORD`; without it they return `401`. The Swagger UI at
+`/swagger-ui` is protected the same way.
+
+The Next.js frontend never exposes this password to the browser: it verifies
+the password once at login, issues a signed session cookie, and its
+`/api/admin/proxy/*` route attaches the Basic header server-side.
+
+```bash
+curl -u admin:$ADMIN_PASSWORD -X POST http://localhost:8080/api/skills \
+  -H 'Content-Type: application/json' \
+  -d '{"icon":"code","title":"Rust","description":"..."}'
+```
+
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/admin/login` | Admin authentication |
+| `POST` | `/api/admin/login` | Verify the admin password (public; rate limited to 10 attempts per IP per 5 minutes) |
+| `GET` | `/api/blog/admin/posts` | List all posts, drafts included |
 | `POST` | `/api/about` | Update about info |
 | `POST` | `/api/skills` | Create a skill |
 | `PUT` | `/api/skills/:id` | Update a skill |
@@ -169,8 +184,11 @@ cp .env.example .env
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL connection string | — |
 | `PORT` | Server port | `8080` |
-| `ADMIN_PASSWORD` | Admin login password | — |
+| `ADMIN_PASSWORD` | Admin password. **Required** — while unset, every admin endpoint returns 401 | — |
+| `ALLOWED_ORIGINS` | Comma-separated browser origins allowed by CORS | `http://localhost:3000` |
 | `CLOUDINARY_URL` | Cloudinary credentials URL | — |
+| `DB_MAX_CONNECTIONS` | Database pool size | `10` |
+| `DB_ACQUIRE_TIMEOUT_SECS` | Seconds to wait for a pooled connection | `10` |
 
 ### Run Locally
 
